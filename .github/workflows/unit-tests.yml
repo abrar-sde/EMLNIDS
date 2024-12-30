@@ -1,0 +1,120 @@
+name: unit-tests
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - 'develop'
+
+
+jobs:
+  # uses the common workflow that builds slips
+  install-dependencies-using-reusable-workflow:
+    uses: ./.github/workflows/install-slips-dependencies.yml
+
+  unit-tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 1800
+    # make this job depend on the first job
+    needs: install-dependencies-using-reusable-workflow
+
+    strategy:
+      matrix:
+        test_file:
+          - test_inputProc.py
+          - test_main.py
+          - test_conn.py
+          - test_downloaded_file.py
+          - test_ssl.py
+          - test_tunnel.py
+          - test_ssh.py
+          - test_dns.py
+          - test_notice.py
+          - test_software.py
+          - test_smtp.py
+          - test_whitelist.py
+          - test_arp.py
+          - test_blocking.py
+          - test_flow_handler.py
+          - test_horizontal_portscans.py
+          - test_http_analyzer.py
+          - test_vertical_portscans.py
+          - test_network_discovery.py
+          - test_virustotal.py
+          - test_update_file_manager.py
+          - test_threat_intelligence.py
+          - test_slips_utils.py
+          - test_slips.py
+          - test_profiler.py
+          - test_leak_detector.py
+          - test_ip_info.py
+          - test_evidence.py
+          - test_asn_info.py
+          - test_urlhaus.py
+          - test_markov_chain.py
+          - test_daemon.py
+          - test_go_director.py
+          - test_notify.py
+          - test_checker.py
+          - test_base_model.py
+          - test_set_evidence.py
+          - test_trustdb.py
+          - test_cesnet.py
+          - test_output.py
+          - test_riskiq.py
+          - test_spamhaus.py
+          - test_circllu.py
+          - test_evidence_handler.py
+          - test_alert_handler.py
+          - test_redis_manager.py
+          - test_ioc_handler.py
+          - test_timeline.py
+          - test_database.py
+          - test_symbols_handler.py
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: ''
+
+
+    - name: Restore APT cache
+      id: apt-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+          /var/lib/apt/lists
+        key: apt-cache
+
+    - if: ${{ steps.apt-cache.outputs.cache-hit == 'true' }}
+      name: Echo restored from cache
+      continue-on-error: true
+      run: echo "Restored APT dependencies from cache successfully"
+
+    - name: Install Python dependencies (from cache if possible)
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r install/requirements.txt
+
+    - name: Install apt dependencies (from cache if possible)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y $(cat install/apt_dependencies.txt)
+
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
+
+    - name: Run Unit Tests for ${{ matrix.test_file }}
+      run: |
+        python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+
+    - name: Upload Artifacts
+      if: success() || failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test_slips_locally-integration-tests-output
+        path: |
+          output/integration_tests
